@@ -55,3 +55,42 @@ def test_voicebank_refuses_unknown_schema_version(tmp_path):
     path.write_text(json.dumps({"schema_version": 999, "profiles": []}))
     with pytest.raises(ValueError, match="schema_version"):
         VoiceBank.load(path)
+
+def test_voicebank_enrol_appends_profile(tmp_path):
+    path = tmp_path / "voicebank.json"
+    bank = VoiceBank.load(path)
+    bank.enrol(
+        name="Alice Smith",
+        embedding=[0.3] * 256,
+        enrolled_from="fixtures/alice.wav",
+        duration_s=42.0,
+        n_speakers_in_audio=1,
+        notes="self-recorded",
+        embedding_model="pyannote/speaker-diarization-3.1",
+    )
+    bank.save(path)
+    re = VoiceBank.load(path)
+    assert len(re.profiles) == 1
+    assert re.profiles[0].name == "Alice Smith"
+    assert re.profiles[0].embedding_dim == 256
+
+def test_voicebank_enrol_multi_sample_same_name(tmp_path):
+    path = tmp_path / "voicebank.json"
+    bank = VoiceBank.load(path)
+    bank.enrol(name="Alice Smith", embedding=[0.1]*256, enrolled_from="a.wav",
+               duration_s=30.0, n_speakers_in_audio=1, notes="", embedding_model="m")
+    bank.enrol(name="Alice Smith", embedding=[0.5]*256, enrolled_from="b.wav",
+               duration_s=45.0, n_speakers_in_audio=2, notes="", embedding_model="m")
+    grouped = bank.by_name()
+    assert len(grouped["Alice Smith"]) == 2
+
+def test_voicebank_remove(tmp_path):
+    path = tmp_path / "voicebank.json"
+    bank = VoiceBank.load(path)
+    bank.enrol(name="A", embedding=[0.1]*256, enrolled_from="a.wav",
+               duration_s=30.0, n_speakers_in_audio=1, notes="", embedding_model="m")
+    bank.enrol(name="B", embedding=[0.2]*256, enrolled_from="b.wav",
+               duration_s=30.0, n_speakers_in_audio=1, notes="", embedding_model="m")
+    n = bank.remove("A")
+    assert n == 1
+    assert [p.name for p in bank.profiles] == ["B"]

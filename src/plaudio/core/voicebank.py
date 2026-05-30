@@ -84,3 +84,29 @@ class VoiceBank:
         before = len(self.profiles)
         self.profiles = [p for p in self.profiles if p.name != name]
         return before - len(self.profiles)
+
+    def enrol(
+        self,
+        *,
+        name: str,
+        embedding: list[float],
+        enrolled_from: str,
+        duration_s: float,
+        n_speakers_in_audio: int,
+        notes: str,
+        embedding_model: str,
+    ) -> VoiceProfile:
+        profile = VoiceProfile(
+            id=str(uuid.uuid4()),
+            name=name,
+            embedding=embedding,
+            embedding_model=embedding_model,
+            embedding_dim=len(embedding),
+            enrolled_from=enrolled_from,
+            enrolled_at=datetime.datetime.utcnow().isoformat() + "Z",
+            duration_s=duration_s,
+            n_speakers_in_audio=n_speakers_in_audio,
+            notes=notes,
+        )
+        self.profiles.append(profile)
+        return profile
