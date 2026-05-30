@@ -79,6 +79,35 @@ plaudio db search "deadline" --speaker "Alice Smith"
 
 See [`examples/quickstart.md`](examples/quickstart.md) for the full walkthrough.
 
+## Interactive labelling: bootstrap once, label nothing forever
+
+If you have used the Plaud app, you have done this dance: after every recording, you tap each speaker cluster, type a name, watch the labels propagate through the transcript, and repeat for the next meeting. The work is per-recording. Tomorrow's meeting starts at zero.
+
+Plaudio inverts the cycle. `plaudio label` plays the same per-cluster prompt, but it adds an `--enrol` flag that writes the voice into your bank as you go. The next time the same person speaks in any recording, `plaudio match` labels them automatically. After ten or so meetings with your usual circle, you stop labelling entirely.
+
+```bash
+# Bootstrap mode: interactive playback + auto-enrolment in one pass
+plaudio label meeting.mp3 meeting.plaud.json --enrol
+
+# Batch mode: you already know who's who, skip the audio
+plaudio label meeting.mp3 meeting.plaud.json \
+    --batch-label "SPEAKER_00=Alice Smith,SPEAKER_01=Bob Jones" --enrol
+
+# Re-enrol clusters that are already labelled correctly (bank update only)
+plaudio label meeting.mp3 meeting.plaud.json --enrol-only
+```
+
+The interactive loop:
+
+1. For each unknown cluster with ≥15s of airtime, find the longest clean monologue.
+2. Slice it out with ffmpeg, play through `afplay` in the background.
+3. Show the matching transcript text on screen.
+4. Prompt: type a name, or `s`kip, or `u`nknown, or `r`eplay, or `q`uit.
+5. Write the label to the JSON immediately (resumable on Ctrl-C).
+6. With `--enrol`: use a wider 3-minute window (the cleanest 3 minutes of that speaker's airtime) to compute a robust embedding and add it to the voice bank.
+
+This is the difference between a labelling tool and a learning tool. Plaud's app helps you for one recording. Plaudio's `label` helps you forever, because every label you type today is a profile that auto-matches tomorrow.
+
 ## Biometric data warning
 
 `voicebank.json` contains voice fingerprints derived from real people. **Treat it like a password file.**
