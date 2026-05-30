@@ -110,3 +110,43 @@ class VoiceBank:
         )
         self.profiles.append(profile)
         return profile
+
+    def enrol_from_audio(
+        self,
+        audio_path: pathlib.Path,
+        *,
+        name: str,
+        start_s: float | None,
+        end_s: float | None,
+        hf_token: str,
+        notes: str = "",
+        num_speakers: int | None = None,
+    ) -> VoiceProfile:
+        """Run pyannote diarisation, pick the SPEAKER_NN with maximum overlap in
+        [start_s, end_s], use its mean embedding to enrol."""
+        from plaudio.core.diarise import diarise_with_embeddings
+        result = diarise_with_embeddings(audio_path, hf_token=hf_token, num_speakers=num_speakers)
+        if not result.embeddings_by_label:
+            raise RuntimeError("pyannote returned no speaker_embeddings")
+        totals: dict[str, float] = {}
+        for tstart, tend, sp in result.turns:
+            if start_s is None or end_s is None:
+                totals[sp] = totals.get(sp, 0.0) + (tend - tstart)
+            else:
+                ovl = max(0.0, min(tend, end_s) - max(tstart, start_s))
+                if ovl > 0:
+                    totals[sp] = totals.get(sp, 0.0) + ovl
+        if not totals:
+            raise RuntimeError(f"No speaker overlaps [{start_s}, {end_s}]")
+        target_label = max(totals.items(), key=lambda kv: kv[1])[0]
+        emb = result.embeddings_by_label[target_label]
+        duration_s = (end_s - start_s) if (start_s is not None and end_s is not None) else totals[target_label]
+        return self.enrol(
+            name=name,
+            embedding=emb,
+            enrolled_from=str(audio_path),
+            duration_s=float(duration_s),
+            n_speakers_in_audio=len(result.embeddings_by_label),
+            notes=notes,
+            embedding_model="pyannote/speaker-diarization-3.1 (DiarizeOutput.speaker_embeddings)",
+        )
