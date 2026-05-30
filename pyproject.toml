@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plaudio"
+version = "0.1.0"
+description = "Voice-bank-first speaker labelling for the Plaud Note family. Local, macOS Apple Silicon."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "yetiswang" }]
+keywords = ["plaud", "diarisation", "speaker-identification", "whisper", "mlx", "pyannote"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+  "mlx-whisper>=0.3",
+  "pyannote.audio>=3.1,<5",
+  "torch",
+  "torchaudio",
+  "soundfile",
+  "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-mock", "ruff", "build", "twine"]
+
+[project.scripts]
+plaudio = "plaudio.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: opt-in slow end-to-end test"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
