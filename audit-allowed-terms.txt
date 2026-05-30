@@ -8,3 +8,6 @@
 # === False positives from AGPL-3.0 LICENSE file ===
 e # single-letter list item in AGPL-3.0 ("e) Convey..."); not a private identifier
 DIFFER # AGPL-3.0 contains "may differ in detail"; this is a common English verb, not the stakeholder acronym
+
+# === False positives from Python source code ===
+raise # Python keyword `raise` (raise ValueError, raise TypeError, etc.); not related to the RAISE call acronym
