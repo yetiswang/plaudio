@@ -1,0 +1,6 @@
+# Plaudio audit allow-list
+# Format: <term> # <justification>
+# Every entry MUST have a justification comment.
+# This file is reviewed manually on every release (Layer 5 gate).
+
+# (intentionally empty at v0; add entries only as genuine false-positives arise)

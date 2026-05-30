@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.plaud.json
+*.mp3
+*.wav
+!tests/fixtures/*.wav
+.DS_Store
+# never commit a private wordlist into the public repo
+private-wordlist.txt
+plaud-voice-profiles.json
+plaud-transcripts.db
