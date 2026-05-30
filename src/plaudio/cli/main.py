@@ -2,12 +2,14 @@
 from __future__ import annotations
 import argparse, sys
 from plaudio import __version__
+from plaudio.cli.commands import voicebank as cmd_voicebank
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="plaudio", description="Voice-bank-first speaker labelling.")
     p.add_argument("-V", "--version", action="version", version=f"plaudio {__version__}")
     sub = p.add_subparsers(dest="cmd", required=False)
     sub.add_parser("version", help="print version and exit")
+    cmd_voicebank.register(sub)
     return p
 
 def main(argv: list[str] | None = None) -> int:
