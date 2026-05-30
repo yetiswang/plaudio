@@ -7,6 +7,7 @@ from plaudio.cli.commands import transcribe as cmd_transcribe
 from plaudio.cli.commands import enrol as cmd_enrol
 from plaudio.cli.commands import match as cmd_match
 from plaudio.cli.commands import db as cmd_db
+from plaudio.cli.commands import clean as cmd_clean
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="plaudio", description="Voice-bank-first speaker labelling.")
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     cmd_enrol.register(sub)
     cmd_match.register(sub)
     cmd_db.register(sub)
+    cmd_clean.register(sub)
     return p
 
 def main(argv: list[str] | None = None) -> int:
