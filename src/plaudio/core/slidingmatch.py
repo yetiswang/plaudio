@@ -1,13 +1,28 @@
 """Voice-bank-first sliding-window speaker labelling.
 
-Algorithm: slide a 2s window across the audio with 1s hop, embed each window via
-pyannote/embedding, cosine-match to enrolled profiles (averaged per name),
-coalesce into runs, then overlay onto pre-existing transcript segments.
-This bypasses pyannote's cluster-then-match merger failure on similar voices.
+Algorithm: slide a 2s window across the audio with 1s hop, embed each window
+through the same speaker-embedder used by `pyannote/speaker-diarization-3.1`
+(which is also what `plaudio enrol` uses via `diarise_with_embeddings`), cosine-
+match to enrolled profiles (averaged per name), coalesce into runs, then overlay
+onto pre-existing transcript segments. This bypasses pyannote's cluster-then-
+match merger failure on similar voices.
 
-pyannote 4.x compatibility: `Inference` requires a Model instance, not a string.
-Load via `Model.from_pretrained()` first. The model is gated, so an HF token is
-needed (read from `HF_TOKEN` env or `~/.huggingface/token`).
+Why `pyannote/wespeaker-voxceleb-resnet34-LM` (256-dim) and NOT `pyannote/
+embedding` (512-dim in pyannote 4.x):
+
+  Before this commit, slidingmatch used `pyannote/embedding` standalone. That
+  was the right model under pyannote 3.x (256-dim) but pyannote 4.x updated
+  `pyannote/embedding` to a larger 512-dim model while the speaker-diarization
+  -3.1 pipeline kept its 256-dim wespeaker embedder for backwards compat.
+  Result: enrol produced 256-dim profiles, match extracted 512-dim windows —
+  cosine sim = 0.0 across the board, silent zero-match runs.
+
+  Aligning both code paths on `pyannote/wespeaker-voxceleb-resnet34-LM` (the
+  exact model the pipeline bundles) restores consistency. Origin: 2026-06-01.
+
+pyannote 4.x API note: `Inference` requires a Model instance, not a string.
+Load via `Model.from_pretrained()`. The model is gated; HF token resolution
+via `HF_TOKEN` env, `HUGGINGFACE_TOKEN` env, then `~/.huggingface/token`.
 """
 from __future__ import annotations
 import math
@@ -115,19 +130,23 @@ class SlidingMatcher:
         from pyannote.audio import Model, Inference
 
         warnings.filterwarnings("ignore")
-        # pyannote 4.x: Inference takes a Model instance, not a string.
-        # Load the embedding model explicitly. The model is gated; supply HF token.
+        # Use the SAME embedder as `plaudio enrol` (which loads it transitively
+        # via pyannote/speaker-diarization-3.1). The pipeline pins its embedder
+        # to `pyannote/wespeaker-voxceleb-resnet34-LM` — 256-dim. Loading the
+        # same model directly here keeps match/enrol embeddings dim-compatible.
+        # See module docstring for the why.
         hf_token = _get_hf_token()
         try:
-            model = Model.from_pretrained("pyannote/embedding", token=hf_token)
+            model = Model.from_pretrained(
+                "pyannote/wespeaker-voxceleb-resnet34-LM", token=hf_token
+            )
         except Exception as e:
-            # Most common operator issue: HF gate not accepted for pyannote/embedding.
-            # Give a clear actionable message so users don't drown in the HF stack trace.
             raise RuntimeError(
-                "Failed to load pyannote/embedding. If this is a 403/GatedRepoError, "
-                "visit https://huggingface.co/pyannote/embedding and accept the model "
-                "terms with the same HF account whose token plaudio is using (env "
-                "HF_TOKEN or ~/.huggingface/token). Original error: " + str(e)
+                "Failed to load pyannote/wespeaker-voxceleb-resnet34-LM. If this "
+                "is a 403/GatedRepoError, visit https://huggingface.co/pyannote/"
+                "wespeaker-voxceleb-resnet34-LM and accept the model terms with "
+                "the same HF account whose token plaudio is using (env HF_TOKEN "
+                "or ~/.huggingface/token). Original error: " + str(e)
             ) from e
         try:
             import torch
