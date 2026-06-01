@@ -6,6 +6,28 @@ from __future__ import annotations
 import json, os, pathlib, sqlite3
 from datetime import datetime
 
+def _normalize_segment(s: dict) -> dict:
+    """Accept either the canonical {start_time, end_time, speaker, content} (ms)
+    schema or the raw mlx-whisper {start, end, text} (seconds) schema.
+
+    Canonical schema is returned. Speaker defaults to 'Unknown' when absent.
+    """
+    if "start_time" in s and "content" in s:
+        return {
+            "start_time": int(s["start_time"]),
+            "end_time": int(s["end_time"]),
+            "speaker": s.get("speaker", "Unknown"),
+            "content": s["content"],
+        }
+    # Raw mlx-whisper layout: seconds + 'text'
+    return {
+        "start_time": int(float(s.get("start", 0)) * 1000),
+        "end_time": int(float(s.get("end", 0)) * 1000),
+        "speaker": s.get("speaker", "Unknown"),
+        "content": (s.get("content") or s.get("text") or "").strip(),
+    }
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
   id TEXT PRIMARY KEY,
@@ -79,8 +101,13 @@ class TranscriptCorpus:
                vault_note: str | None = None, audio_path: str | None = None) -> None:
         plaud_json = pathlib.Path(plaud_json)
         data = json.loads(plaud_json.read_text())
-        segs = data.get("segments", [])
-        meta = data.get("meta", {})
+        segs = [_normalize_segment(s) for s in data.get("segments", [])]
+        meta = data.get("meta") or {}
+        # Tolerate top-level language / n_speakers (raw mlx-whisper layout)
+        if "language" not in meta and "language" in data:
+            meta["language"] = data["language"]
+        if "n_speakers" not in meta:
+            meta["n_speakers"] = len({s["speaker"] for s in segs}) or None
         conn = self._connect()
         try:
             with conn:

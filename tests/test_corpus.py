@@ -49,3 +49,37 @@ def test_search_speaker_filter(tmp_path):
     assert len(hits) == 1
     hits2 = corpus.search("foundation", speaker="Alice")
     assert len(hits2) == 0
+
+
+def test_ingest_accepts_raw_mlx_whisper_schema(tmp_path):
+    """plaudio transcribe outputs {start, end, text} (seconds) + top-level language.
+    corpus.ingest must tolerate this so the diarisation-merge step doesn't have
+    to remap field names. Schema-shim regression test (origin: 2026-06-01)."""
+    raw = {
+        "language": "en",
+        "segments": [
+            {"start": 0.0, "end": 2.5, "speaker": "Alice", "text": "raw schema works"},
+            {"start": 2.5, "end": 5.0, "speaker": "Bob", "text": "nanolab raw entry"},
+        ],
+    }
+    corpus = TranscriptCorpus(tmp_path / "tx.db")
+    sample = tmp_path / "raw.plaud.json"
+    sample.write_text(json.dumps(raw))
+    corpus.ingest(sample, meeting_id="RAW", date="2026-06-01", title="Raw", speakers={})
+    rows = corpus.list_meetings()
+    assert rows[0]["id"] == "RAW"
+    assert rows[0]["language"] == "en"
+    assert rows[0]["n_speakers"] == 2
+    hits = corpus.search("nanolab")
+    assert any("nanolab" in h["content"] for h in hits)
+
+
+def test_ingest_accepts_segment_without_speaker(tmp_path):
+    """If diarisation skipped, segments may lack 'speaker'; treat as 'Unknown'."""
+    raw = {"segments": [{"start": 0.0, "end": 1.0, "text": "anonymous chunk"}]}
+    corpus = TranscriptCorpus(tmp_path / "tx.db")
+    sample = tmp_path / "nospeak.plaud.json"
+    sample.write_text(json.dumps(raw))
+    corpus.ingest(sample, meeting_id="NS", date="2026-06-01", title="NS", speakers={})
+    hits = corpus.search("anonymous")
+    assert any("anonymous" in h["content"] for h in hits)

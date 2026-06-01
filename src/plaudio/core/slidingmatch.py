@@ -4,15 +4,31 @@ Algorithm: slide a 2s window across the audio with 1s hop, embed each window via
 pyannote/embedding, cosine-match to enrolled profiles (averaged per name),
 coalesce into runs, then overlay onto pre-existing transcript segments.
 This bypasses pyannote's cluster-then-match merger failure on similar voices.
+
+pyannote 4.x compatibility: `Inference` requires a Model instance, not a string.
+Load via `Model.from_pretrained()` first. The model is gated, so an HF token is
+needed (read from `HF_TOKEN` env or `~/.huggingface/token`).
 """
 from __future__ import annotations
 import math
+import os
 import pathlib
 import warnings
 
 DEFAULT_THRESHOLD = 0.55
 DEFAULT_WINDOW_S = 2.0
 DEFAULT_HOP_S = 1.0
+
+
+def _get_hf_token() -> str | None:
+    """Look up HF token: env var first, then ~/.huggingface/token."""
+    tok = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    if tok:
+        return tok.strip()
+    p = pathlib.Path.home() / ".huggingface" / "token"
+    if p.exists():
+        return p.read_text().strip() or None
+    return None
 
 
 def cosine(a, b) -> float:
@@ -96,11 +112,31 @@ class SlidingMatcher:
                 "n_segments_relabelled": 0,
                 "note": "voicebank empty, all segments stay as-is",
             }
-        from pyannote.audio import Inference
+        from pyannote.audio import Model, Inference
 
         warnings.filterwarnings("ignore")
+        # pyannote 4.x: Inference takes a Model instance, not a string.
+        # Load the embedding model explicitly. The model is gated; supply HF token.
+        hf_token = _get_hf_token()
+        try:
+            model = Model.from_pretrained("pyannote/embedding", token=hf_token)
+        except Exception as e:
+            # Most common operator issue: HF gate not accepted for pyannote/embedding.
+            # Give a clear actionable message so users don't drown in the HF stack trace.
+            raise RuntimeError(
+                "Failed to load pyannote/embedding. If this is a 403/GatedRepoError, "
+                "visit https://huggingface.co/pyannote/embedding and accept the model "
+                "terms with the same HF account whose token plaudio is using (env "
+                "HF_TOKEN or ~/.huggingface/token). Original error: " + str(e)
+            ) from e
+        try:
+            import torch
+            if torch.backends.mps.is_available():
+                model.to(torch.device("mps"))
+        except Exception:
+            pass
         inf = Inference(
-            "pyannote/embedding",
+            model,
             window="sliding",
             duration=self.window_s,
             step=self.hop_s,
