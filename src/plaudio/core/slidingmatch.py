@@ -144,12 +144,31 @@ class SlidingMatcher:
         sliding = inf(str(audio_path))
         window_labels = []
         n_matched = 0
+        # Dim-mismatch check: pyannote 3.x emitted 256-dim from pyannote/embedding;
+        # pyannote 4.x emits 512-dim. A voicebank enrolled under an older version
+        # will silently produce zero matches (cosine() returns 0.0 on dim mismatch).
+        # Detect once on the first window and surface an actionable error.
+        first_window_dim: int | None = None
+        bank_dim = len(next(iter(self.means.values())))
         for chunk, emb in zip(sliding.sliding_window, sliding.data):
             emb_list = (
                 [float(x) for x in emb.flatten().tolist()]
                 if hasattr(emb, "flatten")
                 else list(emb)
             )
+            if first_window_dim is None:
+                first_window_dim = len(emb_list)
+                if first_window_dim != bank_dim:
+                    raise RuntimeError(
+                        f"Voicebank/embedding dim mismatch: bank has {bank_dim}-dim "
+                        f"profiles but current pyannote/embedding model emits "
+                        f"{first_window_dim}-dim. The bank was built under a "
+                        f"different pyannote-audio version. Regenerate the bank by "
+                        f"re-enrolling each voice with `plaudio enrol` under the "
+                        f"current install (pyannote 3.x → 4.x typically changes "
+                        f"256 → 512). Original samples per voice should be kept; "
+                        f"see 90-Archive/voice-bank/ on Yuyang's setup."
+                    )
             best_name = None
             best_cos = -1.0
             for name, mean in self.means.items():

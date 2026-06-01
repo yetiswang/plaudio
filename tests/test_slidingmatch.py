@@ -34,3 +34,12 @@ def test_average_by_name_means():
     by_name = {"Alice": [[1.0, 0.0], [0.0, 1.0]]}
     means = average_by_name(by_name)
     assert means["Alice"] == pytest.approx([0.5, 0.5])
+
+
+def test_cosine_zero_on_dim_mismatch():
+    """Documents the behaviour that motivated the dim-mismatch early-raise in
+    SlidingMatcher.label_segments: cosine() returns 0.0 on differing dims,
+    which would otherwise produce a silent 0-match run when a voicebank built
+    under pyannote 3.x (256-dim) is matched against pyannote 4.x (512-dim)."""
+    assert cosine([1.0, 0.0], [1.0, 0.0, 0.0]) == pytest.approx(0.0)
+    assert cosine([1.0, 0.0, 0.0], [1.0, 0.0]) == pytest.approx(0.0)
