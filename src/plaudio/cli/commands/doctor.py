@@ -32,11 +32,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     else:
         fails |= _bad("Python", f"{pv.major}.{pv.minor} (>= 3.11 required)")
 
-    ff = shutil.which("ffmpeg")
-    if ff:
-        _ok("ffmpeg", ff)
+    from plaudio.core.ffmpeg import REMEDIATION, resolve_ffmpeg_dir
+    ff_dir = resolve_ffmpeg_dir()
+    if ff_dir:
+        on_path = shutil.which("ffmpeg")
+        note = f"{ff_dir}/ffmpeg"
+        if on_path and os.path.dirname(on_path) != ff_dir:
+            note += f" (PATH ffmpeg at {on_path} is broken; using working fallback)"
+        _ok("ffmpeg", note)
     else:
-        fails |= _bad("ffmpeg", "not on PATH; install: brew install ffmpeg")
+        fails |= _bad("ffmpeg", REMEDIATION)
 
     mw = shutil.which("mlx_whisper")
     if mw:
@@ -71,6 +76,26 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print("  - torch MPS not available (will fall back to CPU; slower)")
     except ImportError:
         fails |= _bad("torch", "not installed")
+
+    try:
+        import torchcodec
+        from torchcodec._core.ops import load_torchcodec_shared_libraries
+        load_torchcodec_shared_libraries()
+        _ok("torchcodec", f"{getattr(torchcodec, '__version__', '?')} (ffmpeg dylibs resolved)")
+    except ImportError as e:
+        fails |= _bad("torchcodec", f"import failed: {e}")
+    except RuntimeError as e:
+        first_line = str(e).splitlines()[0] if str(e) else "load_torchcodec_shared_libraries raised"
+        fails |= _bad(
+            "torchcodec",
+            f"shared libraries did not load -- {first_line}. "
+            f"Likely cause: Homebrew ffmpeg outpaced torchcodec's supported range "
+            f"(torchcodec 0.7 supports ffmpeg 4-7; if `brew list ffmpeg` is >=8, "
+            f"install a side-by-side version: `brew install ffmpeg@7 && brew pin ffmpeg@7`, "
+            f"then symlink /opt/homebrew/opt/ffmpeg@7/lib/lib{{avutil.59,avcodec.61,"
+            f"avformat.61,avfilter.10,avdevice.61,swresample.5,swscale.8}}.dylib "
+            f"into /opt/homebrew/lib/",
+        )
 
     print()
     if fails:
